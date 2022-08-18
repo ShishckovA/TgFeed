@@ -1,4 +1,17 @@
 import os
+import logging
+logging.basicConfig(filename='logs.txt',
+                    filemode='a',
+                    format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
+                    datefmt='%H:%M:%S',
+                    level=logging.INFO)
+
+logger = logging.getLogger('tg_feed')
+console = logging.StreamHandler()
+console.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s')
+console.setFormatter(formatter)
+logger.addHandler(console)
 
 API_ID = os.getenv("API_ID")
 API_HASH = os.getenv("API_HASH")
