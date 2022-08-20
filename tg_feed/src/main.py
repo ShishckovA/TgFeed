@@ -33,7 +33,7 @@ def is_ad_tag(tag: Union[
     types.MessageEntityUnknown,
 ], message: Message):
     logger.info(f"Processing tag {tag.to_dict()} "
-                f"({message.message[tag.offset:tag.offset + tag.length]}, "
+                f"({message.message[tag.offset:tag.offset + tag.length]}), "
                 f"type {type(tag)}")
     is_mention_tag = type(tag) in [
         types.MessageEntityCashtag,
@@ -67,7 +67,7 @@ def is_ad_tag(tag: Union[
     return is_ad
 
 
-async def handler(event: events.NewMessage.Event):
+async def handler(client: TelegramClient, sent_group_id: set, event: events.NewMessage.Event):
     message: types.Message = event.message
     logger.info(f"Message: {str(message)}")
     if isinstance(event.message.peer_id, types.PeerChannel):
@@ -79,10 +79,28 @@ async def handler(event: events.NewMessage.Event):
                 [tag for tag in message.entities if is_ad_tag(tag, message)]
         ) > 0:
             logger.info("Got an ad tag, goto trash")
-            await message.forward_to(TRASH_CHANNEL)
+            await message.forward_to(TRASH_CHANNEL, as_album=True)
         else:
             logger.info("Good post, goto target")
-            await message.forward_to(TARGET_CHANNEL)
+            if message.grouped_id is not None:
+                if message.grouped_id in sent_group_id:
+                    logger.info("Already sent this group")
+                    return
+                logger.info("Hasn't sent yet")
+                sent_group_id.add(message.grouped_id)
+                res = await client.get_messages(channel_id, limit=10)
+                logger.info("Got messages")
+                to_send = []
+                for elem in res:
+                    if elem.grouped_id == message.grouped_id:
+                        to_send.append(elem)
+                logger.info(f"Sending album of {len(to_send)} media")
+
+                await client.forward_messages(TARGET_CHANNEL, to_send)
+            else:
+                logger.info(f"Sending single message ")
+                logger.error(
+                    await message.forward_to(TARGET_CHANNEL))
 
 
 async def terminate(client: TelegramClient):
@@ -97,8 +115,9 @@ async def configure_and_start_polling():
     asyncio.get_event_loop().add_signal_handler(
         signal.SIGTERM, lambda: asyncio.ensure_future(client.disconnect()))
     await client.connect()
+    sent_grouped_id = {}
 
-    client.on(events.NewMessage())(handler)
+    client.on(events.NewMessage())(lambda event: handler(client, sent_grouped_id, event))
 
     logger.info("Start polling")
     await client.run_until_disconnected()
