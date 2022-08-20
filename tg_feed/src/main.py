@@ -11,6 +11,7 @@ from config import API_ID, API_HASH, ACCEPTED_CHANNELS, TARGET_CHANNEL, \
 
 logger = get_logger(__name__)
 
+
 def is_ad_tag(tag: Union[
     types.MessageEntityBold,
     types.MessageEntityCode,
