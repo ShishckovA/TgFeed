@@ -86,8 +86,8 @@ async def handler(client: TelegramClient, sent_group_id: set, event: events.NewM
                 if message.grouped_id in sent_group_id:
                     logger.info("Already sent this group")
                     return
-                logger.info("Hasn't sent yet")
                 sent_group_id.add(message.grouped_id)
+                logger.info("Hasn't sent yet")
                 res = await client.get_messages(channel_id, limit=10)
                 logger.info("Got messages")
                 to_send = []
@@ -115,7 +115,7 @@ async def configure_and_start_polling():
     asyncio.get_event_loop().add_signal_handler(
         signal.SIGTERM, lambda: asyncio.ensure_future(client.disconnect()))
     await client.connect()
-    sent_grouped_id = {}
+    sent_grouped_id = set()
 
     client.on(events.NewMessage())(lambda event: handler(client, sent_grouped_id, event))
 
