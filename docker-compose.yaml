@@ -1,0 +1,12 @@
+version: "3"
+
+services:
+  tg_feed:
+    build:
+      context: .
+      dockerfile: tg_feed/docker/Dockerfile
+    env_file:
+      - .env
+    restart: unless-stopped
+    volumes:
+      - ./logs:/tg_feed/logs
