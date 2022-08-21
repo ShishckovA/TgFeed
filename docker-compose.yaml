@@ -1,7 +1,7 @@
 version: "3"
 
 services:
-  tg_feed:
+  bot:
     build:
       context: .
       dockerfile: tg_feed/docker/Dockerfile
@@ -10,3 +10,4 @@ services:
     restart: unless-stopped
     volumes:
       - ./logs:/tg_feed/logs
+#      - ./tg_feed/src:/tg_feed/src

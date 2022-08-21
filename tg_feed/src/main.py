@@ -3,6 +3,7 @@ import signal
 from typing import Union
 
 from telethon import TelegramClient, events, types
+from telethon.tl.functions.account import UpdateStatusRequest
 from telethon.tl.types import Message
 from config import get_logger
 
@@ -67,40 +68,57 @@ def is_ad_tag(tag: Union[
     return is_ad
 
 
-async def handler(client: TelegramClient, sent_group_id: set, event: events.NewMessage.Event):
+def set_offline(client: TelegramClient):
+    client(UpdateStatusRequest(offline=True))
+
+
+def message_is_ad(message: types.Message):
+    if message.entities is not None:
+        ad_tags = [tag for tag in message.entities if is_ad_tag(tag, message)]
+        return len(ad_tags) > 0
+    return False
+
+
+async def handler(client: TelegramClient, sent_group_id: set,
+                  event: events.NewMessage.Event):
     message: types.Message = event.message
     logger.info(f"Message: {str(message)}")
     if isinstance(event.message.peer_id, types.PeerChannel):
+        to_send: list[Message] = []
+        is_ad = False
         channel_id = message.peer_id.channel_id
         if channel_id not in ACCEPTED_CHANNELS:
             logger.info(f"Not from a target channel: {channel_id}")
             return
-        if message.entities is not None and len(
-                [tag for tag in message.entities if is_ad_tag(tag, message)]
-        ) > 0:
-            logger.info("Got an ad tag, goto trash")
-            await message.forward_to(TRASH_CHANNEL, as_album=True)
-        else:
-            logger.info("Good post, goto target")
-            if message.grouped_id is not None:
-                if message.grouped_id in sent_group_id:
-                    logger.info("Already sent this group")
-                    return
-                sent_group_id.add(message.grouped_id)
-                logger.info("Hasn't sent yet")
-                res = await client.get_messages(channel_id, limit=10)
-                logger.info("Got messages")
+        if message.grouped_id is not None:
+            logger.info("Got a grouped message")
+            if message.grouped_id in sent_group_id:
+                logger.info("Already sent this group")
                 to_send = []
-                for elem in res:
-                    if elem.grouped_id == message.grouped_id:
-                        to_send.append(elem)
-                logger.info(f"Sending album of {len(to_send)} media")
-
-                await client.forward_messages(TARGET_CHANNEL, to_send)
             else:
-                logger.info(f"Sending single message ")
-                logger.error(
-                    await message.forward_to(TARGET_CHANNEL))
+                logger.info("Hasn't sent yet")
+                sent_group_id.add(message.grouped_id)
+                to_send = [
+                    msg for msg in
+                    await client.get_messages(channel_id, limit=10)
+                    if msg.grouped_id == message.grouped_id
+                ]
+                logger.info("Collected messages")
+
+                for grouped_message in to_send:
+                    if message_is_ad(grouped_message):
+                        is_ad = True
+                        logger.info(f"Some message ({message.id}) is ad")
+                        break
+        else:
+            is_ad = message_is_ad(message)
+            to_send = [message]
+        logger.info(f"Sending {len(to_send)} messages"
+                    f"to {'ad' if is_ad else 'meme'} channel")
+        await client.forward_messages(
+            TRASH_CHANNEL if is_ad else TARGET_CHANNEL, to_send
+        )
+    set_offline(client)
 
 
 async def terminate(client: TelegramClient):
@@ -117,7 +135,8 @@ async def configure_and_start_polling():
     await client.connect()
     sent_grouped_id = set()
 
-    client.on(events.NewMessage())(lambda event: handler(client, sent_grouped_id, event))
+    client.on(events.NewMessage())(
+        lambda event: handler(client, sent_grouped_id, event))
 
     logger.info("Start polling")
     await client.run_until_disconnected()
