@@ -40,4 +40,4 @@ ACCEPTED_CHANNELS = [
 ]
 TARGET_CHANNEL = 1407901668
 TRASH_CHANNEL = 1611196915
-ACCEPTED_URLS = ['teletype', 'telegra']
+ACCEPTED_URLS = ['teletype.in', 'telegra.ph']
